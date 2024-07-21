@@ -193,19 +193,17 @@ io.on('connection', (socket) => {
         });
 
         // Handle user leaving explicitly
-        socket.on('user left', (userName, groupName) => {
-            if (userName && groupName && currentGroupName === groupName) {
-                io.to(groupName).emit('user left', userName);
+        socket.on('user left', (userName) => {
+            if (userName && currentGroupName) {
+                io.to(currentGroupName).emit('user left', userName);
             }
         });
     });
 
     // Handle user disconnect
     socket.on('disconnect', () => {
-        if (currentGroupName && currentUserName) {
-            io.to(currentGroupName).emit('user left', currentUserName);
-            console.log('User disconnected');
-        }
+        console.log('User disconnected');
+        // No 'user left' event emitted here
     });
 
     // Handle new user
