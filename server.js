@@ -175,8 +175,15 @@ app.get("/socket.io/socket.io.js", (req, res) => {
 io.on('connection', (socket) => {
     console.log('A user connected');
 
-    // Join the group room
+    // Variable to store group membership
+    let currentGroupName = '';
+    let currentUserName = '';
+
+    // Handle join group
     socket.on('join group', (groupName, userName) => {
+        currentGroupName = groupName;
+        currentUserName = userName;
+
         socket.join(groupName);
         io.to(groupName).emit('user joined', userName);
 
@@ -185,17 +192,19 @@ io.on('connection', (socket) => {
             io.to(groupName).emit('chat message', data);
         });
 
-        // Handle user disconnect
-        socket.on('disconnect', () => {
-            io.to(groupName).emit('user left', userName);
-            console.log('User disconnected');
+        // Handle user leaving explicitly
+        socket.on('user left', (userName, groupName) => {
+            if (userName && groupName && currentGroupName === groupName) {
+                io.to(groupName).emit('user left', userName);
+            }
         });
     });
 
-    // Handle user leaving explicitly
-    socket.on('user left', (userName, groupName) => {
-        if (userName && groupName) {
-            io.to(groupName).emit('user left', userName);
+    // Handle user disconnect
+    socket.on('disconnect', () => {
+        if (currentGroupName && currentUserName) {
+            io.to(currentGroupName).emit('user left', currentUserName);
+            console.log('User disconnected');
         }
     });
 
@@ -206,6 +215,7 @@ io.on('connection', (socket) => {
         }
     });
 });
+
 
 
 server.listen(PORT, () => {
