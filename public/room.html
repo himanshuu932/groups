@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create or Join Room</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            background: #007bff;
+            color: white;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        #rooms {
+            margin-top: 20px;
+        }
+
+        #rooms ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #rooms li {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h2>Create a Room</h2>
+        <div class="form-group">
+            <label for="room-name">Room Name</label>
+            <input type="text" id="room-name" />
+        </div>
+        <div class="form-group">
+            <label for="room-password">Password</label>
+            <input type="password" id="room-password" />
+        </div>
+        <button onclick="createRoom()">Create Room</button>
+        <h2>Available Rooms</h2>
+        <div id="rooms">
+            <ul id="room-list"></ul>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        async function createRoom() {
+            const name = document.getElementById('room-name').value;
+            const password = document.getElementById('room-password').value;
+
+            const response = await fetch('/rooms', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, password })
+            });
+
+            const result = await response.json();
+            if (response.status === 201) {
+                alert(result.message);
+                loadRooms();
+            } else {
+                alert(result.message);
+            }
+        }
+
+        async function loadRooms() {
+            const response = await fetch('/rooms');
+            const rooms = await response.json();
+            const roomList = document.getElementById('room-list');
+            roomList.innerHTML = '';
+            rooms.forEach(room => {
+                const li = document.createElement('li');
+                li.textContent = room.name;
+                const joinButton = document.createElement('button');
+                joinButton.textContent = 'Join';
+                joinButton.onclick = () => joinRoom(room.name);
+                li.appendChild(joinButton);
+                roomList.appendChild(li);
+            });
+        }
+
+        function joinRoom(roomName) {
+            const password = prompt('Enter the room password:');
+
+            fetch(`/rooms/${roomName}`)
+                .then(response => response.json())
+                .then(room => {
+                    if (room.password === password) {
+                        const userName = prompt('Enter your name:');
+                        if (userName) {
+                            sessionStorage.setItem('roomName', roomName);
+                            sessionStorage.setItem('userName', userName);
+                            socket.emit('join room', { roomName, userName });
+                            window.location.href = '/index.html'; // Redirect to chat page
+                        } else {
+                            alert('You must enter a name to join the room.');
+                        }
+                    } else {
+                        alert('Incorrect password!');
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching room:', err);
+                    alert(`Room not found: ${err}`);
+                });
+        }
+
+        loadRooms(); // Load rooms on page load
+    </script>
+</body>
+</html>
