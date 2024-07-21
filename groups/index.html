@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #chat-container {
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 700px;
+        }
+
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+        }
+
+        #messages {
+            list-style-type: none;
+            margin: 0;
+            padding: 20px;
+            flex-grow: 1;
+            overflow-y: auto;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #messages li {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            max-width: 80%;
+            word-wrap: break-word;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-sent {
+            background: #d1e7dd;
+            align-self: flex-end;
+        }
+
+        .message-received {
+            background: #e0e0e0;
+            align-self: flex-start;
+        }
+
+        .message-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        #form {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+        }
+
+        #input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            background: #007bff;
+            color: white;
+            font-size: 16px;
+            border-radius: 5px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            #form {
+                flex-direction: column;
+            }
+
+            #input {
+                margin-bottom: 10px;
+            }
+
+            button {
+                width: 100%;
+                margin-left: 0;
+            }
+        }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async (event) => {
+            const socket = io();
+            let userName = '';
+
+            // Function to prompt for a name until a valid one is provided
+            function getUserName() {
+                while (!userName.trim()) {
+                    userName = localStorage.getItem('name');
+                    if (userName.trim()) {
+                        localStorage.setItem('name', userName);
+                    }
+                }
+            }
+
+            getUserName(); // Prompt for the user's name
+
+            // Get group ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const groupId = urlParams.get('groupId');
+
+            if (!groupId) {
+                alert('Group ID not found!');
+                return;
+            }
+
+            // Fetch the group name from the server
+            async function fetchGroupName(groupId) {
+                const response = await fetch(`/group/${groupId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.name;
+                } else {
+                    alert('Error fetching group name');
+                }
+            }
+
+            const groupName = await fetchGroupName(groupId);
+            if (!groupName) {
+                alert('Group not found');
+                return;
+            }
+
+            // Update the header with the group name
+            document.getElementById('header').innerHTML = `
+                <div>Chat Application - ${groupName}</div>
+            `;
+
+            // Join the group room
+            socket.emit('join group', groupId, userName);
+
+            const form = document.getElementById('form');
+            const input = document.getElementById('input');
+            const messages = document.getElementById('messages');
+
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (input.value) {
+                    const message = { userName, text: input.value };
+                    socket.emit('chat message', { groupId, message });
+                    input.value = '';
+                }
+            });
+
+            socket.on('chat message', (data) => {
+                const { message } = data;
+                const item = document.createElement('li');
+                item.className = message.userName === userName ? 'message-sent' : 'message-received';
+
+                const header = document.createElement('div');
+                header.className = 'message-header';
+                header.textContent = message.userName;
+
+                const content = document.createElement('div');
+                content.textContent = message.text;
+
+                item.appendChild(header);
+                item.appendChild(content);
+
+                messages.appendChild(item);
+                window.scrollTo(0, document.body.scrollHeight);
+            });
+
+            socket.on('user joined', (name) => {
+                if (name) {
+                    const item = document.createElement('li');
+                    item.textContent = `${name} has joined the chat.`;
+                    item.style.color = 'green';
+                    item.style.textAlign = 'center'; // Center the text
+                    messages.appendChild(item);
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
+            });
+
+            socket.on('user left', (name) => {
+                if (name) {
+                    const item = document.createElement('li');
+                    item.textContent = `${name} has left the chat.`;
+                    item.style.color = 'red';
+                    item.style.textAlign = 'center'; // Center the text
+                    messages.appendChild(item);
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
+            });
+
+            // Notify server of new user
+            socket.emit('new user', userName);
+
+            // Handle user leaving
+            window.addEventListener('beforeunload', () => {
+                socket.emit('user left', userName, groupId);
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="header">
+            <div>Chat Application</div>
+        </div>
+        <ul id="messages"></ul>
+        <form id="form" action="">
+            <input id="input" autocomplete="off" placeholder="Type your message here..." />
+            <button>Send</button>
+        </form>
+    </div>
+</body>
+</html>
